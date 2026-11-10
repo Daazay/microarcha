@@ -1,0 +1,63 @@
+﻿@startuml
+title C4 Container — железнодорожные билеты — версия 2
+top to bottom direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam componentStyle rectangle
+skinparam nodesep 25
+skinparam ranksep 35
+skinparam ArrowColor #475569
+skinparam componentBackgroundColor #EFF6FF
+skinparam databaseBackgroundColor #F1F5F9
+skinparam queueBackgroundColor #FEF3C7
+actor "Клиент\nWeb / mobile" as client
+component "API Gateway [приложение]\nTLS, маршрутизация, проверка токена" as gateway #E2E8F0
+cloud "Провайдер идентификации\n[внешняя система]" as identity
+cloud "Платежный провайдер\n[внешняя система]" as provider
+cloud "Провайдер почты / SMS\n[внешняя система]" as mail
+component "Schedule [приложение]\n----\nВнутренние модули:\nschedule\njourney_search\nrolling_stock\napi, persistence, messaging" as schedule
+component "Sales [приложение]\n----\nВнутренние модули:\nbooking\ninventory\npassengers\ncheckout\napi, persistence, messaging" as sales
+component "Payment [приложение]\n----\nВнутренние модули:\npayments, refunds\nprovider_adapter\nreconciliation\napi, persistence, messaging" as payment
+component "Notification [приложение]\nФоновый обработчик\n----\nevent_consumer\ntemplates, delivery, retries\npersistence, messaging" as notification
+component "Audit [приложение]\nФоновый обработчик и API истории\n----\nevent_consumer\nhistory_writer, history_query\npersistence" as audit
+database "schedule_db [PostgreSQL]\n----\nстанции, маршруты, рейсы, остановки\nпоезда, вагоны, физические места\nSQL-индексы поиска, outbox" as sdb
+database "sales_db [PostgreSQL]\n----\nзаказы, билеты, тарифы, пассажиры\nсегменты, удержания, закрепления\ncheckout_state, inbox, outbox" as bdb
+database "payment_db [PostgreSQL]\n----\nплатежи, попытки, денежные возвраты\nсобытия провайдера, outbox" as pdb
+database "notification_db [PostgreSQL]\n----\nшаблоны, задания, попытки\ninbox, outbox" as ndb
+database "audit_db [PostgreSQL]\n----\nотдельная история бизнес-операций\nуникальный EventId" as adb
+queue "Kafka [брокер событий]\nОдин логический кластер\n----\nschedule.events\nsales.events\npayment.events\nnotification.events" as kafka
+client --> gateway : HTTPS
+client --> provider : страница оплаты
+gateway --> identity : OIDC / JWKS
+gateway --> schedule : REST: поиск / расписание
+gateway --> sales : REST: места / покупка / профили
+gateway --> payment : webhook
+provider --> gateway : подписанный callback
+sales --> schedule : REST: проверить рейс
+sales --> payment : REST: платеж / возврат
+payment --> provider : HTTPS: операции / сверка
+notification --> sales : REST: данные доставки
+notification --> mail : HTTPS: отправка
+schedule --> sdb : SQL
+sales --> bdb : SQL
+payment --> pdb : SQL
+notification --> ndb : SQL
+audit --> adb : SQL
+schedule -[#B45309,dashed]-> kafka : события рейса
+sales -[#B45309,dashed]-> kafka : события продажи / профиля
+payment -[#B45309,dashed]-> kafka : результаты платежей
+notification -[#B45309,dashed]-> kafka : результаты доставки
+kafka -[#B45309,dashed]-> sales : рейсы + платежи
+kafka -[#B45309,dashed]-> notification : события билетов
+kafka -[#B45309,dashed]-> audit : история операций
+legend bottom
+Прямоугольники, БД и Kafka принадлежат системе продажи билетов; облака — внешние системы.
+Пять сервисов развертываются независимо. Модули в подписях — код внутри приложения.
+Сплошная стрелка — запрос; оранжевая пунктирная — поток событий Kafka.
+Сервис является единственным владельцем своей логической БД.
+Outbox / inbox — локальные таблицы, а не дополнительные сервисы или брокеры.
+История отделена от транзакционных данных. Документы пассажиров в события не включаются.
+Реплики, зоны отказа и инфраструктура DevOps здесь не развернуты: это логическая схема.
+endlegend
+@enduml

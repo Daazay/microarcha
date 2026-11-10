@@ -1,0 +1,75 @@
+﻿@startuml
+
+title Proposed simpler architecture — services, code modules, storage and messaging
+top to bottom direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam componentStyle rectangle
+skinparam nodesep 20
+skinparam ranksep 30
+skinparam wrapWidth 320
+skinparam packageStyle rectangle
+skinparam ArrowColor #475569
+skinparam componentBackgroundColor #EFF6FF
+skinparam databaseBackgroundColor #F1F5F9
+skinparam queueBackgroundColor #FEF3C7
+
+actor "Passenger\nWeb / mobile client" as client
+component "API Gateway\nTLS, routing, authentication checks\nNo ticket business logic" as gateway #E2E8F0
+cloud "Identity provider\nExternal OIDC system" as identity
+cloud "Payment provider\nExternal system" as provider
+cloud "Email / SMS provider\nExternal system" as mail
+
+
+component "Schedule service\n----\nCode modules inside this process:\napi\nschedule — trips, routes, stations\njourney_search — from / to / date\nrolling_stock — trains, seats\npersistence + outbox publisher" as schedule
+component "Sales service\n----\nCode modules inside this process:\napi\nbooking — orders, fares, tickets\ninventory — segments, holds, allocations\npassengers — profiles, documents\ncheckout — payment saga, timers\npersistence + inbox / outbox" as sales
+component "Payment service\n----\nCode modules inside this process:\napi + signed webhook handler\npayments + refunds\nprovider_adapter + reconciliation\npersistence + outbox publisher" as payment
+component "Notification service\nBackground worker + internal status API\n----\nCode modules:\nevent_consumer + templates\nemail_adapter + sms_adapter\nretry_scheduler + delivery_log\npersistence + inbox / outbox" as notification
+component "Audit service\nBackground worker + restricted history API\n----\nCode modules:\nevent_consumer\nhistory_writer + history_query\npersistence + deduplication" as audit
+
+database "schedule_db\nPostgreSQL\n----\ntrips, stops, routes, trains, seats\nsearch indexes / SQL read model\noutbox" as sdb
+database "sales_db\nPostgreSQL\n----\nbookings, tickets, fares\nseat_segments, holds, allocations\npassenger_profiles, documents\nsaga_state, inbox, outbox" as bdb
+database "payment_db\nPostgreSQL\n----\npayments, attempts, refunds\nprovider_events, outbox" as pdb
+database "notification_db\nPostgreSQL\n----\njobs, attempts, templates\ninbox, outbox" as ndb
+database "audit_db\nSeparate PostgreSQL history store\n----\nappend-only business events\nunique event_id" as adb
+queue "Kafka\nOne logical broker cluster\n----\nschedule.events\nsales.events\npayment.events\nnotification.events\nConsumer-specific retry / failure handling" as kafka
+
+client --> gateway : HTTPS
+client --> provider : hosted checkout
+gateway --> identity : OIDC / JWKS
+gateway --> schedule : journey search
+gateway --> sales : booking / profiles
+gateway --> payment : webhook
+provider --> gateway : signed webhook
+sales --> schedule : validate trip
+sales --> payment : payment / refund
+payment --> provider : payment API
+notification --> mail : HTTPS: send
+schedule --> sdb : SQL
+sales --> bdb : SQL
+payment --> pdb : SQL
+notification --> ndb : SQL
+audit --> adb : SQL
+schedule -[#B45309,dashed]-> kafka : publish
+sales -[#B45309,dashed]-> kafka : publish
+payment -[#B45309,dashed]-> kafka : publish
+notification -[#B45309,dashed]-> kafka : publish
+kafka -[#B45309,dashed]-> sales : schedule + payments
+kafka -[#B45309,dashed]-> notification : tickets
+kafka -[#B45309,dashed]-> audit : all events
+
+legend bottom
+Blue boxes = service deployments; the listed code modules are NOT separate processes.
+Solid arrows = requests / SQL. Dashed orange arrows = asynchronous event flow.
+Notification receives the required delivery contact in a restricted event payload.
+Audit persists a redacted subset of events; no passenger document numbers in general event streams.
+Private databases may share a PostgreSQL cluster in a lab; they do not share application tables.
+Production replicas, backups and failure domains are not expanded in this logical view.
+DevOps operates deployments, CI/CD, secrets, metrics, logs and tracing across all services.
+Not included by default: separate Search service, OpenSearch, Redis, Kubernetes.
+endlegend
+@enduml
+
+
+

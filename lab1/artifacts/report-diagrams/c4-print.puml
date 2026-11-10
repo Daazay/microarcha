@@ -1,0 +1,44 @@
+﻿@startuml
+scale 2
+!pragma layout smetana
+skinparam defaultFontName Arial
+skinparam defaultFontSize 16
+skinparam shadowing false
+skinparam nodesep 20
+skinparam ranksep 35
+top to bottom direction
+actor "Пассажир" as user
+cloud "Идентификация\n[внешняя система]" as auth
+cloud "Платежный провайдер\n[внешняя система]" as provider
+cloud "Почта и SMS\n[внешняя система]" as mail
+rectangle "Система покупки и возврата билетов" {
+rectangle "API Gateway\n[приложение]" as g
+rectangle "Search\n[сервис поиска]" as search
+rectangle "Schedule\n[сервис расписания]" as schedule
+rectangle "Booking\n[сервис билетов и саги]" as booking
+rectangle "Inventory\n[сервис мест]" as inv
+rectangle "Payment\n[сервис платежей]" as pay
+rectangle "Passenger\n[сервис профилей]" as pass
+rectangle "Notification\n[сервис уведомлений]" as note
+rectangle "Audit\n[сервис истории]" as audit
+}
+user --> g : HTTPS
+g --> auth : OIDC / JWKS
+g --> search : REST
+g --> booking : REST
+g --> schedule : REST
+g --> inv : REST
+g --> pass : REST
+booking --> schedule : проверка рейса
+booking --> inv : удержание / место
+booking --> pay : оплата / возврат
+booking --> pass : снимок пассажира
+pay --> provider : HTTPS
+provider --> g : webhook
+ g --> pay : webhook
+note --> pass : контакт
+note --> mail : HTTPS
+search -[hidden]-> note
+note -[hidden]-> audit
+@enduml
+

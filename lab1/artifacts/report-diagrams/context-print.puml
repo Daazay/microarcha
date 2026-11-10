@@ -1,0 +1,37 @@
+﻿@startuml
+scale 2
+!pragma layout smetana
+skinparam defaultFontName Arial
+skinparam defaultFontSize 16
+skinparam shadowing false
+skinparam rectangleBackgroundColor #F4F6F8
+skinparam nodesep 35
+skinparam ranksep 45
+top to bottom direction
+rectangle "Расписание\nSchedule" as s
+rectangle "Поиск\nSearch" as q
+rectangle "Учет мест\nInventory" as i
+rectangle "Продажа билетов\nBooking" as b
+rectangle "Платежи\nPayment" as p
+rectangle "Пассажиры\nPassenger" as u
+rectangle "Уведомления\nNotification" as n
+rectangle "История операций\nAudit" as a
+cloud "Платежный\nпровайдер" as ext
+s --> q : 1
+s --> i : 2
+b --> s : 3
+b --> i : 4
+i --> b : 5
+b --> p : 6
+p --> b : 7
+b --> u : 8
+b --> n : 9
+n --> u : 10
+p --> ext : 11
+b -[hidden]down-> a
+note bottom of a
+12. Все контексты публикуют
+события операций для Audit
+end note
+@enduml
+

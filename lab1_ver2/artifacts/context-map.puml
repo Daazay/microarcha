@@ -1,0 +1,35 @@
+﻿@startuml
+title Context Map — железнодорожные билеты — версия 2
+top to bottom direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam rectangleBackgroundColor #EFF6FF
+skinparam nodesep 35
+skinparam ranksep 45
+rectangle "Schedule\nРасписание и поиск" as schedule
+rectangle "Sales\nПродажа билетов\nbooking, inventory, passengers, checkout" as sales
+rectangle "Payment\nДенежные операции" as payment
+rectangle "Notification\nКоммуникация с клиентом" as notification
+rectangle "Audit\nИстория операций" as audit
+cloud "Платежный провайдер\nВнешний контекст" as provider
+sales --> schedule : REST: проверить рейс\nCustomer/Supplier, D → U
+schedule ..> sales : PL: схема, изменения, отмена\nU → D
+sales --> payment : REST: платеж / возврат\nCustomer/Supplier, D → U
+payment ..> sales : PL: результат операции\nU → D
+sales ..> notification : PL: билет выпущен / возвращен\nU → D
+notification --> sales : OHS: данные доставки\nD → U
+payment --> provider : ACL в Payment\nоперации и сверка
+provider ..> payment : webhook: финансовый результат
+schedule ..> audit : PL: изменения рейса
+sales ..> audit : PL: заказ, билет, места, профиль
+payment ..> audit : PL: денежные операции
+notification ..> audit : PL: результаты доставки
+legend bottom
+Контекст — граница модели. Названия модулей внутри Sales не означают отдельные сервисы.
+Сплошная стрелка — запрос; пунктирная — событие или внешний callback.
+U — поставщик контракта, D — потребитель. Направление запроса может быть D → U.
+OHS — опубликованный API; PL — язык событий; ACL — адаптер внешней модели.
+Audit — downstream всех четырех издателей событий операций.
+endlegend
+@enduml

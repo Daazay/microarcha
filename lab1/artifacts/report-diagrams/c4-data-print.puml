@@ -1,0 +1,50 @@
+﻿@startuml
+scale 2
+!pragma layout smetana
+skinparam defaultFontName Arial
+skinparam defaultFontSize 16
+skinparam shadowing false
+skinparam nodesep 30
+skinparam ranksep 30
+left to right direction
+rectangle "Система покупки и возврата билетов" {
+rectangle "Schedule" as s
+rectangle "Search" as q
+rectangle "Inventory" as i
+rectangle "Booking" as b
+rectangle "Payment" as p
+rectangle "Passenger" as u
+rectangle "Notification" as n
+rectangle "Audit" as a
+queue "Kafka\n[брокер событий]" as k
+database "Schedule DB\n[PostgreSQL]" as sd
+database "Search Index\n[OpenSearch]" as qd
+database "Inventory DB\n[PostgreSQL]" as id
+database "Booking DB\n[PostgreSQL]" as bd
+database "Payment DB\n[PostgreSQL]" as pd
+database "Passenger DB\n[PostgreSQL]" as ud
+database "Notification DB\n[PostgreSQL]" as nd
+database "Audit Store\n[история операций]" as ad
+s --> sd : SQL
+q --> qd : HTTPS
+i --> id : SQL
+b --> bd : SQL
+p --> pd : SQL
+u --> ud : SQL
+n --> nd : SQL
+a --> ad : запись / чтение
+s --> k : расписание
+p --> k : платежи
+u --> k : аудит
+k --> q : расписание
+k --> i : расписание
+k --> b : места / платежи
+k --> n : билеты
+k --> a : все операции
+b --> k : билеты
+i --> k : места
+q --> k : аудит
+n --> k : доставка
+}
+@enduml
+
