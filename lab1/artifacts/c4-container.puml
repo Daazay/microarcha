@@ -1,0 +1,82 @@
+﻿@startuml
+title C4 — Container: система железнодорожных билетов
+left to right direction
+skinparam shadowing false
+skinparam linetype polyline
+
+
+actor "Пассажир" as user
+cloud "Провайдер идентификации\n[External Software System]" as identity
+cloud "Платежный провайдер\n[External Software System]" as provider
+cloud "Почта / SMS\n[External Software System]" as delivery
+
+rectangle "Система покупки и возврата билетов [Software System]" {
+  rectangle "API Gateway\n[Container: HTTPS / routing]" as gateway
+  rectangle "Schedule: расписание\n[Container: REST / events]" as schedule
+  rectangle "Search: поиск\n[Container: REST / projection]" as search
+  rectangle "Inventory: места\n[Container: REST / transactions]" as inventory
+  rectangle "Booking: билеты и сага\n[Container: REST / workers]" as booking
+  rectangle "Payment: деньги\n[Container: REST / workers]" as payment
+  rectangle "Passenger: профили\n[Container: REST]" as passenger
+  rectangle "Notification: доставка\n[Container: workers]" as notification
+  rectangle "Audit: история\n[Container: consumer / REST]" as audit
+  queue "Брокер событий\n[Container: Kafka]" as bus
+
+  database "Schedule DB\n[Container: PostgreSQL]" as sdb
+  database "Search Index\n[Container: OpenSearch]" as searchdb
+  database "Inventory DB\n[Container: PostgreSQL]" as idb
+  database "Booking DB\n[Container: PostgreSQL]" as bdb
+  database "Payment DB\n[Container: PostgreSQL]" as pdb
+  database "Passenger DB\n[Container: PostgreSQL]" as passdb
+  database "Notification DB\n[Container: PostgreSQL]" as ndb
+  database "Audit Store\n[Container: отдельное хранилище истории]" as adb
+}
+
+user --> gateway : поиск, покупка, возврат [HTTPS]
+user --> provider : платежная страница [HTTPS]
+gateway --> identity : проверка идентификации [OIDC/JWKS]
+gateway --> search : поиск [REST]
+gateway --> schedule : схема рейса [REST]
+gateway --> inventory : доступность [REST]
+gateway --> booking : покупка / возврат [REST]
+gateway --> passenger : профили [REST]
+gateway --> payment : webhook провайдера [REST]
+booking --> schedule : проверка рейса [REST]
+booking --> passenger : снимок пассажира [REST]
+booking --> inventory : удержание / закрепление / освобождение [REST]
+booking --> payment : платеж / возврат [REST]
+payment --> provider : операции / сверка [HTTPS]
+provider --> gateway : подписанный webhook [HTTPS]
+notification --> passenger : контакт [REST]
+notification --> delivery : отправка [HTTPS]
+
+schedule --> sdb : чтение / запись [SQL]
+search --> searchdb : индекс / поиск [HTTPS]
+inventory --> idb : чтение / запись [SQL]
+booking --> bdb : заказ / сага / outbox [SQL]
+payment --> pdb : операции / outbox [SQL]
+passenger --> passdb : чтение / запись [SQL]
+notification --> ndb : задания / попытки [SQL]
+audit --> adb : запись истории / чтение
+
+schedule --> bus : расписание [Kafka]
+search --> bus : аудит операций индекса [Kafka]
+inventory --> bus : события мест [Kafka]
+booking --> bus : события билетов [Kafka]
+payment --> bus : результаты операций [Kafka]
+passenger --> bus : аудит изменений [Kafka]
+notification --> bus : результаты доставки [Kafka]
+bus --> search : расписание [Kafka]
+bus --> inventory : расписание [Kafka]
+bus --> booking : места / платежи [Kafka]
+bus --> notification : билеты [Kafka]
+bus --> audit : история операций [Kafka]
+
+legend bottom
+  C4 Container: приложения и хранилища, не классы и не физические серверы.
+  Каждый сервис имеет отдельное хранилище и является его единственным писателем.
+  Стрелки Kafka отражают поток событий; REST — инициатора запроса.
+  SQL-хранилища и поисковый движок — предложенные технологии, не требования задания.
+endlegend
+@enduml
+

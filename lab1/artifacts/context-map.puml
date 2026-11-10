@@ -1,0 +1,48 @@
+﻿@startuml
+title Context Map — железнодорожные билеты, вариант 9993
+left to right direction
+skinparam shadowing false
+skinparam rectangleBackgroundColor #EEF4FA
+
+rectangle "Расписание\nSchedule" as schedule
+rectangle "Поиск\nSearch" as search
+rectangle "Учет мест\nInventory" as inventory
+rectangle "Продажа билетов\nBooking" as booking
+rectangle "Платежи\nPayment" as payment
+rectangle "Пассажиры\nPassenger" as passenger
+rectangle "Уведомления\nNotification" as notification
+rectangle "История операций\nAudit" as audit
+cloud "Платежный провайдер" as provider
+
+schedule --> search : OHS / PL; U → D\nсобытия расписания → поисковая проекция
+schedule --> inventory : OHS / PL; U → D\nсхема рейса, изменение и отмена
+booking --> schedule : Customer/Supplier; D → U\nREST: проверка рейса и версии
+booking --> passenger : Customer/Supplier; D → U\nREST: снимок пассажира
+booking --> inventory : Customer/Supplier; D → U\nREST: удержать / закрепить / освободить
+inventory --> booking : PL; U → D\nистечение удержания, результат закрепления
+booking --> payment : Customer/Supplier; D → U\nREST: оплата / возврат денег
+payment --> booking : PL; U → D\nрезультат оплаты / возврата
+payment --> provider : ACL в Payment\nплатежи и сверка; webhook обратно
+booking --> notification : OHS / PL; U → D\nбилет оформлен / возвращен
+notification --> passenger : Customer/Supplier; D → U\nREST: контакт получателя
+schedule --> audit : PL; U → D\nизменения расписания
+search --> audit : PL; U → D\nслужебные операции индекса
+inventory --> audit : PL; U → D\nоперации с местами
+booking --> audit : PL; U → D\nоперации с билетами
+payment --> audit : PL; U → D\nфинансовые результаты
+passenger --> audit : PL; U → D\nфакт изменения профиля без документов
+notification --> audit : PL; U → D\nрезультаты доставки
+
+legend bottom
+  Каждый прямоугольник — bounded context.
+  Стрелка показывает инициатора запроса → получателя
+  либо издателя события → потребителя; назначение подписано.
+  U — upstream, владелец контракта/модели; D — downstream.
+  Направление U/D не обязано совпадать с направлением REST-запроса.
+  Customer/Supplier — согласование контракта поставщика с потребителем.
+  OHS — Open Host Service; PL — Published Language (версионируемые схемы).
+  ACL — Anti-Corruption Layer: изоляция модели внешнего провайдера.
+  Audit — downstream-потребитель минимальных событий операций.
+endlegend
+@enduml
+
